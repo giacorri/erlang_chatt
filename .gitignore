@@ -1,0 +1,45 @@
+# Build artifacts
+/_build/
+
+# Rebar3 packages and plugins
+/_checkouts/
+.rebar3
+
+# Release artifacts
+/rel/*/log/
+/rel/*/tmp/
+/rel/*/releases/
+/rel/*/lib/
+/rel/*/erts-*/
+
+# Erlang crash dumps
+erl_crash.dump
+
+# Core dumps and logs
+core
+*.log
+
+# Emacs, Vim, macOS, and IDE noise
+*~
+*.swp
+.DS_Store
+.idea/
+.vscode/
+
+*.pem
+
+# Terraform state
+*.tfstate
+*.tfstate.backup
+*.tfvars
+crash.log
+
+# Sensitive Terraform files
+*.tfvars.json
+override.tf
+override.tf.json
+terraform.tfvars
+
+# Terraform CLI local files
+.terraform/
+.terraform.lock.hcl
