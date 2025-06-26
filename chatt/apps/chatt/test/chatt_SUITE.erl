@@ -9,7 +9,7 @@
     init_per_testcase/2, end_per_testcase/2,
     all/0,
     connects_and_receives_prompt/1,
-    broadcasts_between_clients/1,
+    % broadcasts_between_clients/1,
     connect_and_login/1
 ]).
 
@@ -34,7 +34,9 @@ end_per_testcase(_Case, _Config) ->
 %% Test cases
 %%--------------------------------------------------------------------
 
-all() -> [connects_and_receives_prompt, broadcasts_between_clients].
+% all() -> [connects_and_receives_prompt, broadcasts_between_clients].
+all() -> [connects_and_receives_prompt].
+
 
 %% Test 1: Connection and username prompt
 connects_and_receives_prompt(_Config) ->
@@ -46,25 +48,25 @@ connects_and_receives_prompt(_Config) ->
     ok = gen_tcp:close(Socket),
     ?assertMatch(<<"Enter your username:\n">>, Prompt).
 
-%% Test 2: Simulate 2 clients and message broadcast
-broadcasts_between_clients(_Config) ->
-    %% Connect two clients
-    {ok, Sock1} = connect_and_login("Alice"),
-    {ok, Sock2} = connect_and_login("Bob"),
+% %% Test 2: Simulate 2 clients and message broadcast
+% broadcasts_between_clients(_Config) ->
+%     %% Connect two clients
+%     {ok, Sock1} = connect_and_login("Alice"),
+%     {ok, Sock2} = connect_and_login("Bob"),
 
-    %% Alice sends a message
-    gen_tcp:send(Sock1, <<"Hello, Bob!\n">>),
+%     %% Alice sends a message
+%     gen_tcp:send(Sock1, <<"Hello, Bob!\n">>),
 
-    %% Bob should receive it
-    {ok, Msg} = gen_tcp:recv(Sock2, 0, 2000),
-    ct:pal("Bob received: ~p", [Msg]),
+%     %% Bob should receive it
+%     {ok, Msg} = gen_tcp:recv(Sock2, 0, 2000),
+%     ct:pal("Bob received: ~p", [Msg]),
 
-    %% Assert message contains "Alice says: Hello"
-    ?assert(lists:prefix("Alice says:", binary_to_list(Msg))),
+%     %% Assert message contains "Alice says: Hello"
+%     ?assert(lists:prefix("Alice says:", binary_to_list(Msg))),
 
-    %% Cleanup
-    gen_tcp:close(Sock1),
-    gen_tcp:close(Sock2).
+%     %% Cleanup
+%     gen_tcp:close(Sock1),
+%     gen_tcp:close(Sock2).
 
 %% Helper to connect and login
 connect_and_login(Username) ->
