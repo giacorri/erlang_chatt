@@ -1,5 +1,7 @@
 # Erlang chat project
 
+## Instructions
+
 Run tests and compile with
 
 ```bash
@@ -27,3 +29,24 @@ then users will be able to specify their **username**, and with the following co
 - `/join <room name>` will let a user join the specified room;
 - `/leave` will make the user leave the current room;
 - `/destroy <room name>` will delete the specified room, only if the user created it;
+
+## Deploy
+
+A Terraform folder is included, to deploy the project into an AWS EC2, with:
+
+```bash
+cd terraform
+terraform apply
+```
+
+after creating a terraform variable file, in `terraform/terraform.tfvars` with the following structure:
+
+```tfvars
+key_pair_name   = "key_pair_name"
+public_key_path = "~/path/to/public_key"
+private_key_path = "~/path/to/private_key"
+```
+
+The deployment log can be found inside the EC2, by connecting through **SSH**, in `/var/log/user_data.log`
+
+The deploy builds and launches a docker container running the chat server.
