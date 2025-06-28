@@ -43,3 +43,5 @@ terraform.tfvars
 # Terraform CLI local files
 .terraform/
 .terraform.lock.hcl
+tfplan
+*.tfstate*

@@ -1,6 +1,6 @@
 # Erlang chat project
 
-## Instructions
+## Local deploy
 
 Run tests and compile with
 
@@ -30,7 +30,7 @@ then users will be able to specify their **username**, and with the following co
 - `/leave` will make the user leave the current room;
 - `/destroy <room name>` will delete the specified room, only if the user created it;
 
-## Deploy
+## AWS Deploy
 
 A Terraform folder is included, to deploy the project into an AWS EC2, with:
 
@@ -50,3 +50,9 @@ private_key_path = "~/path/to/private_key"
 The deployment log can be found inside the EC2, by connecting through **SSH**, in `/var/log/user_data.log`
 
 The deploy builds and launches a docker container running the chat server.
+
+`nlb_dns_name` is the DNS address of the Network Load Balancer, output of `terraform apply`, which can be used to connect to the chat server after a succesful deploy with
+
+```bash
+nc nlb_dns_name 1234
+```

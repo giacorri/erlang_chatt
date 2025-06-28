@@ -1,7 +1,4 @@
-output "instance_public_ip" {
-  value = aws_instance.chat_server.public_ip
-}
-
-output "instance_id" {
-  value = aws_instance.chat_server.id
+output "nlb_dns_name" {
+  description = "DNS name of the Network Load Balancer"
+  value       = aws_lb.chat_nlb.dns_name
 }
