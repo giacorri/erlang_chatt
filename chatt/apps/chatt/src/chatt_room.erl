@@ -9,7 +9,7 @@
 -behaviour(gen_server).
 
 %% Public API exports
--export([start_link/0, register_user/2, unregister_user/1, handle_command/2, send_message/2]).
+-export([start_link/0, register_user/2, unregister_user/1, handle_command/2, send_message/2, send_private/3]).
 
 %% gen_server callback exports
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
@@ -35,6 +35,9 @@ handle_command(User, CommandLine) ->
 
 send_message(User, Msg) ->
     gen_server:cast(?MODULE, {send, User, Msg}).
+
+send_private(Sender, Receiver, Message) ->
+    gen_server:cast(?MODULE, {private_message, Sender, Receiver, Message}).
 
 %%--------------------------------------------------------------------
 %% gen_server callbacks
@@ -72,7 +75,7 @@ handle_cast({command, Username, CommandLine}, State) ->
         ["create", RoomName] ->
             case maps:is_key(RoomName, State#state.rooms) of
                 true ->
-                    reply(Username, "Room already exists.\n", State),
+                    reply(Username, ansi:red("Room already exists.\n"), State),
                     {noreply, State};
                 false ->
                     OldRoomOpt = maps:get(Username, State#state.user_rooms, undefined),
@@ -93,10 +96,10 @@ handle_cast({command, Username, CommandLine}, State) ->
 
                     case OldRoomOpt of
                         undefined -> ok;
-                        OldRoomName -> reply(Username, io_lib:format("Left room <~s>; ", [OldRoomName]), FinalState)
+                        OldRoomName -> reply(Username, ansi:green(io_lib:format("Left room <~s>; ", [OldRoomName])), FinalState)
                     end,
                     
-                    reply(Username, io_lib:format("Room <~s> created and joined.\n", [RoomName]), FinalState),
+                    reply(Username, ansi:green(io_lib:format("Room <~s> created and joined.\n", [RoomName])), FinalState),
                     {noreply, FinalState}
             end;
 
@@ -104,10 +107,10 @@ handle_cast({command, Username, CommandLine}, State) ->
             case {maps:get(RoomName, State#state.rooms, undefined),
                 maps:get(RoomName, State#state.room_creators, undefined)} of
                 {undefined, _} ->
-                    reply(Username, io_lib:format("Room <~s> does not exist.\n", [RoomName]), State),
+                    reply(Username, ansi:red(io_lib:format("Room <~s> does not exist.\n", [RoomName])), State),
                     {noreply, State};
                 {_, Creator} when Creator =/= Username ->
-                    reply(Username, io_lib:format("Only the creator `~s` can destroy room <~s>.\n", [Creator, RoomName]), State),
+                    reply(Username, ansi:red(io_lib:format("Only the creator `~s` can destroy room <~s>.\n", [Creator, RoomName])), State),
                     {noreply, State};
                 {Members, Username} ->
                     %% Remove room
@@ -120,7 +123,7 @@ handle_cast({command, Username, CommandLine}, State) ->
                         State#state.user_rooms
                     ),
 
-                    %% Notify affected users (optional)
+                    %% Notify affected users
                     lists:foreach(
                         fun(User) ->
                             case maps:get(User, State#state.users, undefined) of
@@ -137,14 +140,14 @@ handle_cast({command, Username, CommandLine}, State) ->
                         room_creators = NewCreators
                     },
 
-                    reply(Username, io_lib:format("Destroyed room <~s>.\n", [RoomName]), FinalState),
+                    reply(Username, ansi:green(io_lib:format("Destroyed room <~s>.\n", [RoomName])), FinalState),
                     {noreply, FinalState}
             end;
 
         ["join", RoomName] ->
             case maps:get(RoomName, State#state.rooms, undefined) of
                 undefined ->
-                    reply(Username, io_lib:format("Room <~s> not found.\n", [RoomName]), State),
+                    reply(Username, ansi:red(io_lib:format("Room <~s> not found.\n", [RoomName])), State),
                     {noreply, State};
                 Members ->
                     OldRoomOpt = maps:get(Username, State#state.user_rooms, undefined),
@@ -193,7 +196,7 @@ handle_cast({command, Username, CommandLine}, State) ->
             {noreply, State};
 
         _ ->
-            reply(Username, "Unknown command.\n", State),
+            reply(Username, ansi:red("Unknown command, available commands are:\n- /rooms\n- /create\n- /join\n- /leave\n- /destroy\n- @username\n"), State),
             {noreply, State}
     end;
 
@@ -204,19 +207,46 @@ handle_cast({send, Sender, Msg}, State) ->
             {noreply, State};
         Room ->
             Members = sets:to_list(maps:get(Room, State#state.rooms)),
+            RoomTag = ansi:green(io_lib:format("<~s>", [Room])),
+            Message = io_lib:format("~s ~s: ~s\n", [RoomTag, Sender, Msg]),
+
             lists:foreach(fun(User) ->
-                if
-                    User =/= Sender ->
-                        case maps:get(User, State#state.users, undefined) of
-                            undefined -> ok;
-                            Sock -> gen_tcp:send(Sock, io_lib:format("<~s>~s: ~s\n", [Room, Sender, Msg]))
-                        end;
-                    true ->
-                        ok
+                case maps:get(User, State#state.users, undefined) of
+                    undefined -> ok;
+                    Sock -> gen_tcp:send(Sock, Message)
                 end
             end, Members),
+
             {noreply, State}
     end;
+
+handle_cast({private_message, Sender, Receiver, Message}, State) ->
+    Users = State#state.users,
+    case maps:find(Receiver, Users) of
+        {ok, ReceiverSock} ->
+            Formatted = ansi:blue(io_lib:format("[PRIVATE] ~s: ~s~n", [Sender, Message])),
+            gen_tcp:send(ReceiverSock, lists:flatten(Formatted)),
+            %% Notify sender too
+            case maps:find(Sender, Users) of
+                {ok, SenderSock} ->
+                    Confirmation = ansi:blue(io_lib:format("[to ~s] ~s~n", [Receiver, Message])),
+                    gen_tcp:send(SenderSock, lists:flatten(Confirmation));
+                error ->
+                    ok
+            end,
+            {noreply, State};
+        error ->
+            %% Receiver not found — inform sender
+            case maps:find(Sender, Users) of
+                {ok, SenderSock} ->
+                    Error_string = ansi:red(io_lib:format("User `~s` not found or offline.\n", [Receiver])),
+                    gen_tcp:send(SenderSock, Error_string);
+                error ->
+                    ok
+            end,
+            {noreply, State}
+    end;
+
 
 handle_cast(_, State) ->
     {noreply, State}.

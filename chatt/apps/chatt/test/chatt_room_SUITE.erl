@@ -5,7 +5,7 @@
 -include_lib("common_test/include/ct.hrl").
 -include_lib("kernel/include/file.hrl").
 -include_lib("stdlib/include/assert.hrl").
-
+-type socket() :: port().
 %% Exported callbacks
 -export([
     all/0,
@@ -18,7 +18,9 @@
     join_room_test/1,
     destroy_room_by_creator_test/1,
     destroy_room_by_other_test/1,
-    switch_room_test/1
+    switch_room_test/1,
+    private_message_test/1,
+    receive_message/2
 ]).
 
 %% === Test Cases List ===
@@ -28,7 +30,8 @@ all() ->
         join_room_test,
         destroy_room_by_creator_test,
         destroy_room_by_other_test,
-        switch_room_test
+        switch_room_test,
+        private_message_test
     ].
 
 %% === Setup / Teardown ===
@@ -93,3 +96,61 @@ switch_room_test(_Config) ->
     Room2 = maps:get("room2", State#state.rooms),
     ?assertNot(sets:is_element("alice", Room1)),
     ?assert(sets:is_element("alice", Room2)).
+
+private_message_test(_Config) ->
+    {ok, Port} = application:get_env(chatt, chatt_port),
+
+    {ok, AliceSock} = login_fake_client("localhost", Port, "alice"),
+    {ok, BobSock} = login_fake_client("localhost", Port, "bob"),
+    {ok, CharlieSock} = login_fake_client("localhost", Port, "charlie"),
+
+    %% Send a private message
+    Message = "Hi Bob, it's private.",
+    ok = chatt_room:send_private("alice", "bob", Message),
+
+    %% Receive message on Bob's socket
+    %% Here we simulate socket receive
+    receive_message(BobSock, Message),
+
+    %% Alice should NOT receive the message
+    {error, timeout} = gen_tcp:recv(CharlieSock, 0, 100),
+
+    %% Cleanup
+    gen_tcp:close(AliceSock),
+    gen_tcp:close(BobSock),
+    gen_tcp:close(CharlieSock),
+    ok.
+
+receive_message(Socket, ExpectedMessage) ->
+    case gen_tcp:recv(Socket, 0, 1000) of
+        {ok, Data} ->
+            Msg = binary_to_list(Data),
+            ?assert(string:str(Msg, ExpectedMessage) > 0);
+        Error ->
+            io:format("[ERROR] Failed to receive message: ~p~n", [Error]),
+            ?assertEqual(ok, Error) %% force fail
+    end.
+
+-spec login_fake_client(Host :: string(), Port :: integer(), Username :: string()) -> {ok, socket()} | {error, term()}.
+login_fake_client(Host, Port, Username) ->
+    case gen_tcp:connect(Host, Port, [binary, {active, false}]) of
+        {ok, Sock} ->
+            % Receive login prompt
+            case gen_tcp:recv(Sock, 0, 1000) of
+                {ok, Prompt} ->
+                    io:format("[TEST] Received prompt: ~s~n", [binary_to_list(Prompt)]),
+                    % Send username + newline
+                    gen_tcp:send(Sock, Username ++ "\n"),
+                    % Receive login confirmation
+                    case gen_tcp:recv(Sock, 0, 1000) of
+                        {ok, Confirmation} ->
+                            io:format("[TEST] Received confirmation: ~s~n", [binary_to_list(Confirmation)]);
+                        _ ->
+                            ok
+                    end,
+                    {ok, Sock};
+                Error ->
+                    {error, {no_login_prompt, Error}}
+            end;
+        Error -> Error
+    end.

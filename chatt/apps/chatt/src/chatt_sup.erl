@@ -33,7 +33,7 @@ init([]) ->
         period => 1               % In this period of time (seconds)
     },
 
-    % List of children to supervise. Empty for now – you’ll add workers or other supervisors here.
+    % List of children to supervise.
     ChildSpecs = [
         #{id => chatt_server,
         start => {chatt_server, start_link, []},
@@ -49,8 +49,5 @@ init([]) ->
         modules => [chatt_room]}
     ],
 
-
-    % Return the tuple expected by the supervisor: {ok, {SupFlags, ChildSpecs}}
+    % Return the tuple expected by the supervisor
     {ok, {SupFlags, ChildSpecs}}.
-
-%% internal functions
