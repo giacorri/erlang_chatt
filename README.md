@@ -30,6 +30,8 @@ then users will be able to specify their **username**, and with the following co
 - `/leave` will make the user leave the current room;
 - `/destroy <room name>` will delete the specified room, only if the user created it;
 
+or send private messages with `@username msg`
+
 ## AWS Deploy
 
 A Terraform folder is included, to deploy the project into an AWS EC2, with:
