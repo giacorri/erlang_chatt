@@ -45,8 +45,25 @@ send_private(Sender, Receiver, Message) ->
 
 %% Called when the chat room process starts
 init([]) ->
-    %% State is a map of Username => Socket
-    {ok, #state{}}.
+    chatt_persist:init(),
+
+    Rooms = chatt_persist:load_rooms(), %% list of maps: #{name, private, creator, users}
+    PrivateRooms = [R || R <- Rooms, R.private =:= true],
+    RoomMap = maps:from_list([{R.name, sets:from_list(R.users)} || R <- Rooms]),
+    CreatorMap = maps:from_list([{R.name, R.creator} || R <- Rooms]),
+    PrivateSet = sets:from_list([R.name || R <- PrivateRooms]),
+
+    Invites = chatt_persist:load_all_invites(),
+
+    State = #state{
+        users = #{},  %% empty: built at runtime
+        rooms = RoomMap,
+        user_rooms = #{}, %% empty: built at runtime
+        room_creators = CreatorMap,
+        private_rooms = PrivateSet,
+        room_invitations = Invites
+    },
+    {ok, State}.
 
 %% Handle a user joining: add their socket to the user map
 handle_cast({register_user, Username, Socket}, State) ->
@@ -99,6 +116,8 @@ handle_cast({command, Username, CommandLine}, State) ->
                         OldRoomName -> reply(Username, ansi:green(io_lib:format("Left room <~s>; ", [OldRoomName])), FinalState)
                     end,
                     
+                    chatt_persist:save_room(RoomName, false, User),
+
                     reply(Username, ansi:green(io_lib:format("Room <~s> created and joined.\n", [RoomName])), FinalState),
                     {noreply, FinalState}
             end;
@@ -134,6 +153,8 @@ handle_cast({command, Username, CommandLine}, State) ->
                         undefined -> ok;
                         OldRoomName -> reply(Username, ansi:green(io_lib:format("Left room <~s>; ", [OldRoomName])), FinalState)
                     end,
+
+                    chatt_persist:save_room(RoomName, true, User),
 
                     reply(Username, ansi:green(io_lib:format("Private room <~s> created and joined.\n", [RoomName])), FinalState),
                     {noreply, FinalState}

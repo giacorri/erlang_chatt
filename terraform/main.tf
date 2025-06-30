@@ -177,6 +177,18 @@ resource "aws_launch_template" "chat_template" {
               cd /opt/chatapp
               docker build -t chatapp .
               docker run -d --name chat -p 1234:1234 chatapp
+
+              # Create data directory
+              mkdir -p /var/lib/dynamodb_data
+              chown ubuntu:ubuntu /var/lib/dynamodb_data
+
+              # Run DynamoDB Local container with persistence
+              docker run -d \
+                -p 8000:8000 \
+                -v /var/lib/dynamodb_data:/home/dynamodblocal/data \
+                --name dynamodb_local \
+                amazon/dynamodb-local \
+                -jar DynamoDBLocal.jar -sharedDb -dbPath /home/dynamodblocal/data
               EOF
   )
 
