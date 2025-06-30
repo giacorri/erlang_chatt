@@ -103,6 +103,83 @@ handle_cast({command, Username, CommandLine}, State) ->
                     {noreply, FinalState}
             end;
 
+        ["create_private", RoomName] ->
+            case maps:is_key(RoomName, State#state.rooms) of
+                true ->
+                    reply(Username, ansi:red("Room already exists.\n"), State),
+                    {noreply, State};
+                false ->
+                    OldRoomOpt = maps:get(Username, State#state.user_rooms, undefined),
+                    CleanedState = remove_user_from_previous_room(Username, State),
+
+                    Rooms = CleanedState#state.rooms,
+                    NewRooms = Rooms#{RoomName => sets:add_element(Username, sets:new())},
+                    UserRooms = CleanedState#state.user_rooms,
+                    NewUserRooms = UserRooms#{Username => RoomName},
+                    RoomCreators = CleanedState#state.room_creators,
+                    NewCreators = RoomCreators#{RoomName => Username},
+                    NewPrivates = sets:add_element(RoomName, CleanedState#state.private_rooms),
+                    RoomInvitations = CleanedState#state.room_invitations,
+                    NewInvites = RoomInvitations#{RoomName => sets:new()},
+
+                    FinalState = CleanedState#state{
+                        rooms = NewRooms,
+                        user_rooms = NewUserRooms,
+                        room_creators = NewCreators,
+                        private_rooms = NewPrivates,
+                        room_invitations = NewInvites
+                    },
+
+                    case OldRoomOpt of
+                        undefined -> ok;
+                        OldRoomName -> reply(Username, ansi:green(io_lib:format("Left room <~s>; ", [OldRoomName])), FinalState)
+                    end,
+
+                    reply(Username, ansi:green(io_lib:format("Private room <~s> created and joined.\n", [RoomName])), FinalState),
+                    {noreply, FinalState}
+            end;
+
+        ["invite", TargetUser] ->
+            case maps:get(Username, State#state.user_rooms, undefined) of
+                undefined ->
+                    reply(Username, "You're not in a room.\n", State),
+                    {noreply, State};
+                RoomName ->
+                    case sets:is_element(RoomName, State#state.private_rooms) of
+                        false ->
+                            reply(Username, ansi:red(io_lib:format("Room <~s> is not private.\n", [RoomName])), State),
+                            {noreply, State};
+                        true ->
+                            case maps:get(RoomName, State#state.room_creators, undefined) of
+                                Username ->
+                                    %% Prevent inviting oneself
+                                    case TargetUser =:= Username of
+                                        true ->
+                                            reply(Username, ansi:red("You cannot invite yourself.\n"), State),
+                                            {noreply, State};
+                                        false ->
+                                            OldInvited = maps:get(RoomName, State#state.room_invitations, sets:new()),
+                                            case sets:is_element(TargetUser, OldInvited) of
+                                                true ->
+                                                    reply(Username, ansi:red(io_lib:format("User `~s` is already invited to <~s>.\n", [TargetUser, RoomName])), State),
+                                                    {noreply, State};
+                                                false ->
+                                                    NewInvited = sets:add_element(TargetUser, OldInvited),
+                                                    RoomInvitations = State#state.room_invitations,
+                                                    NewInvites = RoomInvitations#{RoomName => NewInvited},
+                                                    NewState = State#state{room_invitations = NewInvites},
+                                                    reply(Username, ansi:blue(io_lib:format("Invited `~s` to private room <~s>.\n", [TargetUser, RoomName])), NewState),
+                                                    reply(TargetUser, ansi:blue(io_lib:format("You have been invited to join private room <~s> by `~s`.\n", [RoomName, Username])), NewState),
+                                                    {noreply, NewState}
+                                            end
+                                    end;
+                                _ ->
+                                    reply(Username, ansi:red("Only the room creator can invite.\n"), State),
+                                    {noreply, State}
+                            end
+                    end
+            end;
+
         ["destroy", RoomName] ->
             case {maps:get(RoomName, State#state.rooms, undefined),
                 maps:get(RoomName, State#state.room_creators, undefined)} of
@@ -150,34 +227,45 @@ handle_cast({command, Username, CommandLine}, State) ->
                     reply(Username, ansi:red(io_lib:format("Room <~s> not found.\n", [RoomName])), State),
                     {noreply, State};
                 Members ->
-                    OldRoomOpt = maps:get(Username, State#state.user_rooms, undefined),
-                    CleanedState = remove_user_from_previous_room(Username, State),
+                    IsPrivate = sets:is_element(RoomName, State#state.private_rooms),
+                    Creator = maps:get(RoomName, State#state.room_creators, undefined),
+                    InvitedUsers = maps:get(RoomName, State#state.room_invitations, sets:new()),
+                    CanJoin = not IsPrivate orelse Username =:= Creator orelse sets:is_element(Username, InvitedUsers),
 
-                    NewMembers = sets:add_element(Username, Members),
-                    Rooms = CleanedState#state.rooms,
-                    NewRooms = Rooms#{RoomName => NewMembers},
-                    UserRooms = CleanedState#state.user_rooms,
-                    NewUserRooms = UserRooms#{Username => RoomName},
+                    case CanJoin of
+                        false ->
+                            reply(Username, ansi:red(io_lib:format("Room <~s> is private. You are not invited.\n", [RoomName])), State),
+                            {noreply, State};
+                        true ->
+                            OldRoomOpt = maps:get(Username, State#state.user_rooms, undefined),
+                            CleanedState = remove_user_from_previous_room(Username, State),
 
-                    FinalState = CleanedState#state{
-                        rooms = NewRooms,
-                        user_rooms = NewUserRooms
-                    },
+                            NewMembers = sets:add_element(Username, Members),
+                            Rooms = CleanedState#state.rooms,
+                            NewRooms = Rooms#{RoomName => NewMembers},
+                            UserRooms = CleanedState#state.user_rooms,
+                            NewUserRooms = UserRooms#{Username => RoomName},
 
-                    case OldRoomOpt of
-                        undefined -> ok;
-                        OldRoomName -> reply(Username, io_lib:format("Left room <~s>; ", [OldRoomName]), FinalState)
-                    end,
+                            FinalState = CleanedState#state{
+                                rooms = NewRooms,
+                                user_rooms = NewUserRooms
+                            },
 
-                    reply(Username, io_lib:format("Joined room <~s>.\n", [RoomName]), CleanedState),
-                    {noreply, FinalState}
+                            case OldRoomOpt of
+                                undefined -> ok;
+                                OldRoomName -> reply(Username, ansi:green(io_lib:format("Left room <~s>; ", [OldRoomName])), FinalState)
+                            end,
+
+                            reply(Username, ansi:green(io_lib:format("Joined room <~s>.\n", [RoomName])), FinalState),
+                            {noreply, FinalState}
+                    end
             end;
 
         ["leave"] ->
             RoomName = maps:get(Username, State#state.user_rooms, undefined),
             case RoomName of
                 undefined ->
-                    reply(Username, "You are not in a room.\n", State),
+                    reply(Username, ansi:red("You are not in a room.\n"), State),
                     {noreply, State};
                 Room ->
                     RoomMembers = maps:get(Room, State#state.rooms),
@@ -185,25 +273,55 @@ handle_cast({command, Username, CommandLine}, State) ->
                     Rooms = State#state.rooms,
                     NewRooms = Rooms#{Room => UpdatedRoom},
                     NewURs = maps:remove(Username, State#state.user_rooms),
-                    reply(Username, io_lib:format("Left room <~s>.\n", [RoomName]), State),
+                    reply(Username, ansi:green(io_lib:format("Left room <~s>.\n", [RoomName])), State),
                     {noreply, State#state{rooms = NewRooms, user_rooms = NewURs}}
             end;
 
         ["rooms"] ->
-            Names = maps:keys(State#state.rooms),
-            RoomStrs = lists:map(fun(R) -> "<" ++ R ++ ">\n" end, Names),
-            reply(Username, lists:flatten(RoomStrs), State),
+            PrivateRoomMap = State#state.private_rooms,
+            PrivateRoomNames = maps:keys(PrivateRoomMap),
+            RoomCreators = State#state.room_creators,
+
+            %% Filter public rooms: rooms that are NOT in private_rooms
+            AllRoomNames = maps:keys(State#state.rooms),
+            PublicRoomNames = [R || R <- AllRoomNames, not lists:member(R, PrivateRoomNames)],
+
+            %% Private rooms visible to this user: either they are the creator or they were invited
+            CreatorVisible =
+                [R || R <- PrivateRoomNames,
+                    maps:get(R, RoomCreators, undefined) =:= Username],
+
+            InvitedVisible =
+            [R || R <- PrivateRoomNames,
+                case maps:get(R, State#state.room_invitations, undefined) of
+                    undefined -> false;
+                    Set ->
+                        case is_map(Set) orelse is_list(Set) of
+                            true -> sets:is_element(Username, Set);
+                            false -> false
+                        end
+                end],
+
+
+            VisiblePrivateRooms = lists:usort(CreatorVisible ++ InvitedVisible),
+
+            %% Format: green for public, blue for private
+            RoomStrsPublic = [ansi:green("<" ++ R ++ ">\n") || R <- PublicRoomNames],
+            RoomStrsPrivate = [ansi:blue("<" ++ R ++ ">\n") || R <- VisiblePrivateRooms],
+
+            AllRoomStrs = lists:flatten(RoomStrsPublic ++ RoomStrsPrivate),
+            reply(Username, AllRoomStrs, State),
             {noreply, State};
 
         _ ->
-            reply(Username, ansi:red("Unknown command, available commands are:\n- /rooms\n- /create\n- /join\n- /leave\n- /destroy\n- @username\n"), State),
+            reply(Username, ansi:red("Unknown command, available commands are:\n- /rooms\n- /create\n- /create_private\n- /invite\n- /join\n- /leave\n- /destroy\n- @username\n"), State),
             {noreply, State}
     end;
 
 handle_cast({send, Sender, Msg}, State) ->
     case maps:get(Sender, State#state.user_rooms, undefined) of
         undefined ->
-            reply(Sender, "You are not in a room.\n", State),
+            reply(Sender, ansi:red("You are not in a room.\n"), State),
             {noreply, State};
         Room ->
             Members = sets:to_list(maps:get(Room, State#state.rooms)),
@@ -222,31 +340,44 @@ handle_cast({send, Sender, Msg}, State) ->
 
 handle_cast({private_message, Sender, Receiver, Message}, State) ->
     Users = State#state.users,
-    case maps:find(Receiver, Users) of
-        {ok, ReceiverSock} ->
-            Formatted = ansi:blue(io_lib:format("[PRIVATE] ~s: ~s~n", [Sender, Message])),
-            gen_tcp:send(ReceiverSock, lists:flatten(Formatted)),
-            %% Notify sender too
+
+    %% Prevent sending messages to oneself
+    case Sender =:= Receiver of
+        true ->
             case maps:find(Sender, Users) of
                 {ok, SenderSock} ->
-                    Confirmation = ansi:blue(io_lib:format("[to ~s] ~s~n", [Receiver, Message])),
-                    gen_tcp:send(SenderSock, lists:flatten(Confirmation));
+                    gen_tcp:send(SenderSock, ansi:red("Use your mind to speak to yourself.\n"));
                 error ->
                     ok
             end,
             {noreply, State};
-        error ->
-            %% Receiver not found — inform sender
-            case maps:find(Sender, Users) of
-                {ok, SenderSock} ->
-                    Error_string = ansi:red(io_lib:format("User `~s` not found or offline.\n", [Receiver])),
-                    gen_tcp:send(SenderSock, Error_string);
-                error ->
-                    ok
-            end,
-            {noreply, State}
-    end;
+        false ->
+            case maps:find(Receiver, Users) of
+                {ok, ReceiverSock} ->
+                    Formatted = ansi:blue(io_lib:format("[PRIVATE] ~s: ~s~n", [Sender, Message])),
+                    gen_tcp:send(ReceiverSock, lists:flatten(Formatted)),
 
+                    %% Notify sender too
+                    case maps:find(Sender, Users) of
+                        {ok, SenderSock} ->
+                            Confirmation = ansi:blue(io_lib:format("[to ~s] ~s~n", [Receiver, Message])),
+                            gen_tcp:send(SenderSock, lists:flatten(Confirmation));
+                        error ->
+                            ok
+                    end,
+                    {noreply, State};
+                error ->
+                    %% Receiver not found — inform sender
+                    case maps:find(Sender, Users) of
+                        {ok, SenderSock} ->
+                            Error_string = ansi:red(io_lib:format("User `~s` not found or offline.\n", [Receiver])),
+                            gen_tcp:send(SenderSock, Error_string);
+                        error ->
+                            ok
+                    end,
+                    {noreply, State}
+            end
+    end;
 
 handle_cast(_, State) ->
     {noreply, State}.

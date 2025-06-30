@@ -20,7 +20,8 @@
     destroy_room_by_other_test/1,
     switch_room_test/1,
     private_message_test/1,
-    receive_message/2
+    receive_message/2,
+    private_room_visibility_test/1
 ]).
 
 %% === Test Cases List ===
@@ -31,7 +32,8 @@ all() ->
         destroy_room_by_creator_test,
         destroy_room_by_other_test,
         switch_room_test,
-        private_message_test
+        private_message_test,
+        private_room_visibility_test
     ].
 
 %% === Setup / Teardown ===
@@ -43,7 +45,8 @@ end_per_suite(_Config) ->
     ok.
 
 init_per_testcase(_, Config) ->
-    %% Reset state here if needed
+    % ok = application:stop(chatt),
+    % ok = application:start(chatt),
     Config.
 
 end_per_testcase(_, _Config) ->
@@ -110,6 +113,7 @@ private_message_test(_Config) ->
 
     %% Receive message on Bob's socket
     %% Here we simulate socket receive
+    timer:sleep(100),
     receive_message(BobSock, Message),
 
     %% Alice should NOT receive the message
@@ -154,3 +158,41 @@ login_fake_client(Host, Port, Username) ->
             end;
         Error -> Error
     end.
+
+private_room_visibility_test(_Config) ->
+    {ok, Port} = application:get_env(chatt, chatt_port),
+
+    {ok, AliceSock} = login_fake_client("localhost", Port, "alice"),
+    {ok, BobSock} = login_fake_client("localhost", Port, "bob"),
+    {ok, CharlieSock} = login_fake_client("localhost", Port, "charlie"),
+
+    %% Alice creates a private room and invites Bob
+    gen_tcp:send(AliceSock, "/create_private secret\n"),
+    gen_tcp:send(AliceSock, "/invite bob\n"),
+
+    %% Bob lists rooms — should see "secret"
+    gen_tcp:send(BobSock, "/rooms\n"),
+    timer:sleep(100),
+    receive_message(BobSock, "secret"),
+
+    %% Charlie lists rooms — should NOT see "secret"
+    gen_tcp:send(CharlieSock, "/rooms\n"),
+    {ok, Msg} = gen_tcp:recv(CharlieSock, 0, 200),
+    ?assertNot(lists:member("secret", binary_to_list(Msg))),
+
+    %% Bob joins the private room
+    gen_tcp:send(BobSock, "/join secret\n"),
+    timer:sleep(100),
+    State = sys:get_state(chatt_room),
+    ?assertEqual("secret", maps:get("bob", State#state.user_rooms)),
+
+    %% Charlie tries to join — should fail
+    gen_tcp:send(CharlieSock, "/join secret\n"),
+    timer:sleep(100),
+    receive_message(CharlieSock, "Room <secret> is private"),
+
+    %% Cleanup
+    gen_tcp:close(AliceSock),
+    gen_tcp:close(BobSock),
+    gen_tcp:close(CharlieSock),
+    ok.
