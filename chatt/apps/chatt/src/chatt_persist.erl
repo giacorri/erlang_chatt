@@ -35,7 +35,7 @@ save_room(RoomName, IsPrivate, Creator) ->
 
 load_rooms() ->
     {ok, Resp} = erlcloud_ddb:scan("ChattRooms"),
-    [parse_room(Item) || Item <- Resp#ddb_scan_response.items].
+    [parse_room(Item) || Item <- Resp#ddb_scan.items].
 
 parse_room(Item) ->
     <<"room#", Rest/binary>> = proplists:get_value("PK", Item),
@@ -57,7 +57,7 @@ save_message(Room, MessageBin) ->
 load_messages(Room, N) ->
     KeyCond = erlcloud_ddb:make_key_condition("PK", equals, "room#" ++ binary_to_list(Room)),
     {ok, Result} = erlcloud_ddb:query("ChattMessages", [{key_conditions, KeyCond}, {scan_index_forward, false}, {limit, N}]),
-    lists:reverse([list_to_binary(proplists:get_value("message", Msg)) || Msg <- Result#ddb_query_response.items]).
+    lists:reverse([list_to_binary(proplists:get_value("message", Msg)) || Msg <- Result#ddb_q.items]).
 
 save_invite(User, Room) ->
     Item = [
@@ -69,4 +69,4 @@ save_invite(User, Room) ->
 load_user_invites(User) ->
     KeyCond = erlcloud_ddb:make_key_condition("PK", equals, "invite#" ++ binary_to_list(User)),
     {ok, Result} = erlcloud_ddb:query("ChattInvites", [{key_conditions, KeyCond}]),
-    [list_to_binary(proplists:get_value("room", I)) || I <- Result#ddb_query_response.items].
+    [list_to_binary(proplists:get_value("room", I)) || I <- Result#ddb_q.items].

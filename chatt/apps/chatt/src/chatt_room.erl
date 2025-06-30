@@ -48,10 +48,10 @@ init([]) ->
     chatt_persist:init(),
 
     Rooms = chatt_persist:load_rooms(), %% list of maps: #{name, private, creator, users}
-    PrivateRooms = [R || R <- Rooms, R.private =:= true],
-    RoomMap = maps:from_list([{R.name, sets:from_list(R.users)} || R <- Rooms]),
-    CreatorMap = maps:from_list([{R.name, R.creator} || R <- Rooms]),
-    PrivateSet = sets:from_list([R.name || R <- PrivateRooms]),
+    PrivateRooms = [R || R <- Rooms, maps:get(private, R) =:= true],
+    RoomMap = maps:from_list([{maps:get(name, R), sets:from_list(maps:get(users, R))} || R <- Rooms]),
+    CreatorMap = maps:from_list([{maps:get(name, R), maps:get(creator, R)} || R <- Rooms]),
+    PrivateSet = sets:from_list([maps:get(name, R) || R <- PrivateRooms]),
 
     Invites = chatt_persist:load_all_invites(),
 
@@ -116,7 +116,7 @@ handle_cast({command, Username, CommandLine}, State) ->
                         OldRoomName -> reply(Username, ansi:green(io_lib:format("Left room <~s>; ", [OldRoomName])), FinalState)
                     end,
                     
-                    chatt_persist:save_room(RoomName, false, User),
+                    chatt_persist:save_room(RoomName, false, Username),
 
                     reply(Username, ansi:green(io_lib:format("Room <~s> created and joined.\n", [RoomName])), FinalState),
                     {noreply, FinalState}
@@ -154,7 +154,7 @@ handle_cast({command, Username, CommandLine}, State) ->
                         OldRoomName -> reply(Username, ansi:green(io_lib:format("Left room <~s>; ", [OldRoomName])), FinalState)
                     end,
 
-                    chatt_persist:save_room(RoomName, true, User),
+                    chatt_persist:save_room(RoomName, true, Username),
 
                     reply(Username, ansi:green(io_lib:format("Private room <~s> created and joined.\n", [RoomName])), FinalState),
                     {noreply, FinalState}

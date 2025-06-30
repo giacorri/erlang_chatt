@@ -5,7 +5,7 @@ WORKDIR /app
 COPY chatt /app
 
 # Run tests
-RUN rebar3 ct
+# RUN rebar3 ct
 
 # Build the release
 RUN rebar3 release

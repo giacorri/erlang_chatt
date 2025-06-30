@@ -182,6 +182,8 @@ resource "aws_launch_template" "chat_template" {
               mkdir -p /var/lib/dynamodb_data
               chown ubuntu:ubuntu /var/lib/dynamodb_data
 
+              docker pull amazon/dynamodb-local
+
               # Run DynamoDB Local container with persistence
               docker run -d \
                 -p 8000:8000 \
@@ -261,5 +263,10 @@ resource "aws_autoscaling_group" "chat_asg" {
     key                 = "Name"
     value               = "ChatASGInstance"
     propagate_at_launch = true
+  }
+
+  # Trigger rolling update on changes
+  instance_refresh {
+    strategy = "Rolling"
   }
 }
