@@ -175,8 +175,14 @@ resource "aws_launch_template" "chat_template" {
               systemctl enable docker
               git clone https://github.com/giacorri/erlang_chatt.git /opt/chatapp
               cd /opt/chatapp
+
               docker build -t chatapp .
-              docker run -d --name chat -p 1234:1234 chatapp
+              docker run -d --name chat -p 1234:1234 chatapp \
+              -e AWS_ACCESS_KEY_ID=fakeMyKeyId \
+              -e AWS_SECRET_ACCESS_KEY=fakeSecretAccessKey \
+              -e AWS_DYNAMODB_HOST=localhost \
+              -e AWS_DYNAMODB_PORT=8000 \
+              -e AWS_SCHEME=http
 
               # Create data directory
               mkdir -p /var/lib/dynamodb_data
@@ -191,6 +197,11 @@ resource "aws_launch_template" "chat_template" {
                 --name dynamodb_local \
                 amazon/dynamodb-local \
                 -jar DynamoDBLocal.jar -sharedDb -dbPath /home/dynamodblocal/data
+                -e AWS_ACCESS_KEY_ID=fakeMyKeyId \
+                -e AWS_SECRET_ACCESS_KEY=fakeSecretAccessKey \
+                -e AWS_DYNAMODB_HOST=localhost \
+                -e AWS_DYNAMODB_PORT=8000 \
+                -e AWS_SCHEME=http
               EOF
   )
 
