@@ -5,7 +5,8 @@
     {mod, {chatt_app, []}},
     {applications, [
         kernel,
-        stdlib
+        stdlib,
+        erlcloud
     ]},
     {env, [
         {chatt_port, 1234}
