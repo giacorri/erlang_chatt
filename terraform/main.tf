@@ -191,6 +191,8 @@ resource "aws_launch_template" "chat_template" {
                 --name dynamodb_local \
                 amazon/dynamodb-local \
                 -jar DynamoDBLocal.jar -sharedDb -dbPath /home/dynamodblocal/data
+                -e AWS_ACCESS_KEY_ID='fakeMyKeyId'
+                AWS_SECRET_ACCESS_KEY='fakeSecretAccessKey'
               EOF
   )
 
