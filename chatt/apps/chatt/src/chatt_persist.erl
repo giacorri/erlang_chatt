@@ -25,7 +25,8 @@ save_room(RoomName, IsPrivate, Creator) ->
     erlcloud_ddb:put_item("ChattRooms", Item, DdbConfig).
 
 load_rooms() ->
-    {ok, Resp} = erlcloud_ddb:scan("ChattRooms"),
+    DdbConfig = get_dynamo_config(),
+    {ok, Resp} = erlcloud_ddb:scan("ChattRooms", DdbConfig),
     [parse_room(Item) || Item <- Resp#ddb_scan.items].
 
 parse_room(Item) ->
@@ -47,8 +48,13 @@ save_message(Room, MessageBin) ->
     erlcloud_ddb:put_item("ChattMessages", Item, DdbConfig).
 
 load_messages(Room, N) ->
+    DdbConfig = get_dynamo_config(),
     KeyCond = erlcloud_ddb:make_key_condition("PK", equals, "room#" ++ binary_to_list(Room)),
-    {ok, Result} = erlcloud_ddb:query("ChattMessages", [{key_conditions, KeyCond}, {scan_index_forward, false}, {limit, N}]),
+    {ok, Result} = erlcloud_ddb:query("ChattMessages", [
+        {key_conditions, KeyCond},
+        {scan_index_forward, false},
+        {limit, N}
+    ], DdbConfig),
     lists:reverse([list_to_binary(proplists:get_value("message", Msg)) || Msg <- Result#ddb_q.items]).
 
 save_invite(User, Room) ->
@@ -60,6 +66,7 @@ save_invite(User, Room) ->
     erlcloud_ddb:put_item("ChattInvites", Item, DdbConfig).
 
 load_user_invites(User) ->
-    KeyCond = erlcloud_ddb:make_key_condition("PK", equals, "invite#" ++ binary_to_list(User)),
-    {ok, Result} = erlcloud_ddb:query("ChattInvites", [{key_conditions, KeyCond}]),
+    DdbConfig = get_dynamo_config(),
+    KeyCond = erlcloud_ddb:make_key_condition("PK", equals, "invite#" ++ binary_to_list(User), DdbConfig),
+    {ok, Result} = erlcloud_ddb:query("ChattInvites", [{key_conditions, KeyCond}], DdbConfig),
     [list_to_binary(proplists:get_value("room", I)) || I <- Result#ddb_q.items].
