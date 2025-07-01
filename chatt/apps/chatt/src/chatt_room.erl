@@ -53,15 +53,15 @@ init([]) ->
     CreatorMap = maps:from_list([{maps:get(name, R), maps:get(creator, R)} || R <- Rooms]),
     PrivateSet = sets:from_list([maps:get(name, R) || R <- PrivateRooms]),
 
-    Invites = chatt_persist:load_all_invites(),
+    % Invites = chatt_persist:load_all_invites(),
 
     State = #state{
         users = #{},  %% empty: built at runtime
         rooms = RoomMap,
         user_rooms = #{}, %% empty: built at runtime
         room_creators = CreatorMap,
-        private_rooms = PrivateSet,
-        room_invitations = Invites
+        private_rooms = PrivateSet%,
+        % room_invitations = Invites
     },
     {ok, State}.
 
