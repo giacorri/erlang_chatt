@@ -299,8 +299,8 @@ handle_cast({command, Username, CommandLine}, State) ->
             end;
 
         ["rooms"] ->
-            PrivateRoomMap = State#state.private_rooms,
-            PrivateRoomNames = maps:keys(PrivateRoomMap),
+            PrivateRoomSet = State#state.private_rooms,
+            PrivateRoomNames = sets:to_list(PrivateRoomSet),
             RoomCreators = State#state.room_creators,
 
             %% Filter public rooms: rooms that are NOT in private_rooms
@@ -322,7 +322,6 @@ handle_cast({command, Username, CommandLine}, State) ->
                             false -> false
                         end
                 end],
-
 
             VisiblePrivateRooms = lists:usort(CreatorVisible ++ InvitedVisible),
 
