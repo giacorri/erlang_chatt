@@ -45,23 +45,31 @@ send_private(Sender, Receiver, Message) ->
 
 %% Called when the chat room process starts
 init([]) ->
-    chatt_persist:init(),
+    % chatt_persist:init(),
+    % application:ensure_all_started(erlcloud),
+    % Rooms = chatt_persist:load_rooms(), %% list of maps: #{name, private, creator, users}
+    % PrivateRooms = [R || R <- Rooms, maps:get(private, R) =:= true],
+    % RoomMap = maps:from_list([{maps:get(name, R), sets:from_list(maps:get(users, R))} || R <- Rooms]),
+    % CreatorMap = maps:from_list([{maps:get(name, R), maps:get(creator, R)} || R <- Rooms]),
+    % PrivateSet = sets:from_list([maps:get(name, R) || R <- PrivateRooms]),
 
-    Rooms = chatt_persist:load_rooms(), %% list of maps: #{name, private, creator, users}
-    PrivateRooms = [R || R <- Rooms, maps:get(private, R) =:= true],
-    RoomMap = maps:from_list([{maps:get(name, R), sets:from_list(maps:get(users, R))} || R <- Rooms]),
-    CreatorMap = maps:from_list([{maps:get(name, R), maps:get(creator, R)} || R <- Rooms]),
-    PrivateSet = sets:from_list([maps:get(name, R) || R <- PrivateRooms]),
+    % % Invites = chatt_persist:load_all_invites(),
 
-    % Invites = chatt_persist:load_all_invites(),
+    % State = #state{
+    %     users = #{},  %% empty: built at runtime
+    %     rooms = RoomMap,
+    %     user_rooms = #{}, %% empty: built at runtime
+    %     room_creators = CreatorMap,
+    %     private_rooms = PrivateSet%,
+    %     % room_invitations = Invites
+    % },
 
     State = #state{
         users = #{},  %% empty: built at runtime
-        rooms = RoomMap,
+        rooms = #{},
         user_rooms = #{}, %% empty: built at runtime
-        room_creators = CreatorMap,
-        private_rooms = PrivateSet%,
-        % room_invitations = Invites
+        room_creators = #{},
+        private_rooms = sets:new()
     },
     {ok, State}.
 
@@ -116,7 +124,7 @@ handle_cast({command, Username, CommandLine}, State) ->
                         OldRoomName -> reply(Username, ansi:green(io_lib:format("Left room <~s>; ", [OldRoomName])), FinalState)
                     end,
                     
-                    chatt_persist:save_room(RoomName, false, Username),
+                    % chatt_persist:save_room(RoomName, false, Username),
 
                     reply(Username, ansi:green(io_lib:format("Room <~s> created and joined.\n", [RoomName])), FinalState),
                     {noreply, FinalState}
@@ -154,7 +162,7 @@ handle_cast({command, Username, CommandLine}, State) ->
                         OldRoomName -> reply(Username, ansi:green(io_lib:format("Left room <~s>; ", [OldRoomName])), FinalState)
                     end,
 
-                    chatt_persist:save_room(RoomName, true, Username),
+                    % chatt_persist:save_room(RoomName, true, Username),
 
                     reply(Username, ansi:green(io_lib:format("Private room <~s> created and joined.\n", [RoomName])), FinalState),
                     {noreply, FinalState}
