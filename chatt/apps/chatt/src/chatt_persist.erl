@@ -18,9 +18,11 @@ init() ->
         access_key_id = "fakeMyKeyId",
         secret_access_key = "fakeSecretAccessKey",
         aws_region = "us-east-1",
-        ddb_scheme = "http://",
-        ddb_host = "localhost",
+        ddb_scheme = http,
+        % ddb_host = "localhost",
+        ddb_host = "dynamodb_local",  % <-- dynamodb container name
         ddb_port = 8000
+
     },
     erlcloud_aws:configure(Config).
 
