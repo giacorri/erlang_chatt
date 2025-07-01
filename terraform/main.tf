@@ -177,12 +177,7 @@ resource "aws_launch_template" "chat_template" {
               cd /opt/chatapp
 
               docker build -t chatapp .
-              docker run -d --name chat -p 1234:1234 chatapp \
-              -e AWS_ACCESS_KEY_ID=fakeMyKeyId \
-              -e AWS_SECRET_ACCESS_KEY=fakeSecretAccessKey \
-              -e AWS_DYNAMODB_HOST=localhost \
-              -e AWS_DYNAMODB_PORT=8000 \
-              -e AWS_SCHEME=http
+              docker run -d --name chat -p 1234:1234 chatapp
 
               # Create data directory
               mkdir -p /var/lib/dynamodb_data
@@ -196,12 +191,7 @@ resource "aws_launch_template" "chat_template" {
                 -v /var/lib/dynamodb_data:/home/dynamodblocal/data \
                 --name dynamodb_local \
                 amazon/dynamodb-local \
-                -jar DynamoDBLocal.jar -sharedDb -dbPath /home/dynamodblocal/data \
-                -e AWS_ACCESS_KEY_ID=fakeMyKeyId \
-                -e AWS_SECRET_ACCESS_KEY=fakeSecretAccessKey \
-                -e AWS_DYNAMODB_HOST=localhost \
-                -e AWS_DYNAMODB_PORT=8000 \
-                -e AWS_SCHEME=http
+                -jar DynamoDBLocal.jar -sharedDb -dbPath /home/dynamodblocal/data
               EOF
   )
 
