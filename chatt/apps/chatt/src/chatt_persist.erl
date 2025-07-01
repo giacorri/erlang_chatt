@@ -22,18 +22,41 @@ init() ->
         % ddb_host = "localhost",
         ddb_host = "dynamodb_local",  % <-- dynamodb container name
         ddb_port = 8000
-
     },
     erlcloud_aws:configure(Config).
 
 %% @doc Saves a chat room to the DynamoDB table "ChattRooms".
 save_room(RoomName, IsPrivate, Creator) ->
+    % RoomName and Creator are likely Erlang strings (lists of chars).
+    % DynamoDB strings are binaries.
+    RoomNameBinary = list_to_binary(RoomName),
+    CreatorBinary = list_to_binary(Creator),
+
     Item = [
-        {"PK", {s, "room#" ++ RoomName}},
-        {"private", {bool, IsPrivate}},
-        {"creator", {s, Creator}}
+        % Primary Key: Always define its type correctly.
+        % Assumed "PK" is a String in DynamoDB, so <<"room#", RoomNameBinary/binary>> is correct
+        {<<"PK">>, <<"room#", RoomNameBinary/binary>>},
+
+        % For 'private':
+        % Option A: Try passing raw boolean (as per erlcloud's apparent design)
+        % This is what caused your error.
+        {<<"private">>, IsPrivate},
+
+        % Option B: If A fails (which it did), force it to a binary string.
+        % This is the most reliable workaround if DynamoDB or erlcloud's
+        % internal handling of boolean is problematic for your setup.
+        % {<<"private">>, atom_to_binary(IsPrivate, utf8)}, % Converts 'true' -> <<"true">>, 'false' -> <<"false">>
+
+        {<<"creator">>, CreatorBinary}
     ],
-    erlcloud_ddb:put_item("ChattRooms", Item).
+    TableName = <<"ChattRooms">>,
+
+    case erlcloud_ddb:put_item(TableName, Item) of
+        {ok, _Result} ->
+            io:format("Successfully added room ~s to DynamoDB~n", [binary_to_list(RoomNameBinary)]);
+        {error, Reason} ->
+            io:format("Error adding room ~s to DynamoDB: ~p~n", [binary_to_list(RoomNameBinary), Reason])
+    end.
 
 %% @doc Loads all chat rooms from the DynamoDB table "ChattRooms".
 load_rooms() ->
