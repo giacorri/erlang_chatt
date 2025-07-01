@@ -182,24 +182,23 @@ resource "aws_launch_template" "chat_template" {
 
               docker network create chattnet
 
-              docker run -d --name dynamodb_local --network chattnet \
+              docker run -d \
+                --name dynamodb_local \
+                --network chattnet \
                 -p 8000:8000 \
                 -v /var/lib/dynamodb_data:/home/dynamodblocal/data \
                 amazon/dynamodb-local \
-                -sharedDb -dbPath /home/dynamodblocal/data
+                -jar DynamoDBLocal.jar -sharedDb -dbPath /home/dynamodblocal/data
 
               git clone https://github.com/giacorri/erlang_chatt.git /opt/chatapp
               cd /opt/chatapp
 
               docker build -t chatapp .
 
-              docker run -d --name chat --network chattnet \
+              docker run -d \
+                --name chat \
+                --network chattnet \
                 -p 1234:1234 \
-                -e AWS_ACCESS_KEY_ID=fakeMyKeyId \
-                -e AWS_SECRET_ACCESS_KEY=fakeSecretAccessKey \
-                -e AWS_DYNAMODB_HOST=dynamodb_local \  # <--- use container name!
-                -e AWS_DYNAMODB_PORT=8000 \
-                -e AWS_SCHEME=http \
                 chatapp
 
               EOF
