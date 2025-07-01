@@ -37,8 +37,13 @@ save_room(RoomName, IsPrivate, Creator) ->
 
 %% @doc Loads all chat rooms from the DynamoDB table "ChattRooms".
 load_rooms() ->
-    {ok, Resp} = erlcloud_ddb:scan("ChattRooms", []),
-    [parse_room(Item) || Item <- Resp#ddb_scan.items].
+    case erlcloud_ddb:scan("ChattRooms", []) of
+        {ok, Resp} ->
+            [parse_room(Item) || Item <- Resp#ddb_scan.items];
+        {error, Reason} ->
+            error_logger:error_msg("Failed to scan ChattRooms: ~p~n", [Reason]),
+            []
+    end.
 
 parse_room(Item) ->
     {s, <<"room#", Rest/binary>>} = proplists:get_value("PK", Item),

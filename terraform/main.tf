@@ -170,7 +170,7 @@ resource "aws_launch_template" "chat_template" {
               exec > /var/log/user_data.log 2>&1
               set -x
               apt-get update
-              apt-get install -y docker.io git curl
+              apt-get install -y docker.io git curl awscli
               systemctl start docker
               systemctl enable docker
 
@@ -189,6 +189,39 @@ resource "aws_launch_template" "chat_template" {
                 -v /var/lib/dynamodb_data:/home/dynamodblocal/data \
                 amazon/dynamodb-local \
                 -jar DynamoDBLocal.jar -sharedDb -dbPath /home/dynamodblocal/data
+
+              # Wait until DynamoDB is up (basic wait loop)
+              until curl -s http://localhost:8000 > /dev/null; do
+                echo "Waiting for DynamoDB to start..."
+                sleep 1
+              done
+
+              # 1. Create ChattRooms
+              aws dynamodb create-table \
+                --table-name ChattRooms \
+                --attribute-definitions AttributeName=PK,AttributeType=S \
+                --key-schema AttributeName=PK,KeyType=HASH \
+                --provisioned-throughput ReadCapacityUnits=1,WriteCapacityUnits=1 \
+                --endpoint-url http://localhost:8000 \
+                --region us-east-1
+
+              # 2. Create ChattMessages
+              aws dynamodb create-table \
+                --table-name ChattMessages \
+                --attribute-definitions AttributeName=PK,AttributeType=S AttributeName=SK,AttributeType=S \
+                --key-schema AttributeName=PK,KeyType=HASH AttributeName=SK,KeyType=RANGE \
+                --provisioned-throughput ReadCapacityUnits=1,WriteCapacityUnits=1 \
+                --endpoint-url http://localhost:8000 \
+                --region us-east-1
+
+              # 3. Create ChattInvites
+              aws dynamodb create-table \
+                --table-name ChattInvites \
+                --attribute-definitions AttributeName=PK,AttributeType=S \
+                --key-schema AttributeName=PK,KeyType=HASH \
+                --provisioned-throughput ReadCapacityUnits=1,WriteCapacityUnits=1 \
+                --endpoint-url http://localhost:8000 \
+                --region us-east-1
 
               git clone https://github.com/giacorri/erlang_chatt.git /opt/chatapp
               cd /opt/chatapp
